@@ -1,0 +1,17 @@
+#ifndef CONFIG_H_EXAMPLE
+#define CONFIG_H_EXAMPLE
+
+// Configurações de Wi-Fi
+#define WIFI_SSID "SEU_SSID_WIFI"
+#define WIFI_PASSWORD "SUA_SENHA_WIFI"
+
+// Configurações do Broker MQTT (HiveMQ Público)
+#define MQTT_BROKER_HOST "broker.hivemq.com"
+#define MQTT_BROKER_PORT 1883
+#define MQTT_CLIENT_ID "ESP32_Master_Gateway_Default"
+
+// Namespace de Tópicos
+#define MQTT_TOPIC_PREFIX "projetoiot"
+
+#endif // CONFIG_H_EXAMPLE
+
