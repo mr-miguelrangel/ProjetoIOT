@@ -1,0 +1,15 @@
+# Git ignore para projeto PlatformIO / ESP32 C++
+.pio
+.vscode
+.idea
+
+# Credenciais e configurações locais
+include/config.h
+
+# Compilação e binários
+*.o
+*.a
+*.elf
+*.bin
+*.hex
+
