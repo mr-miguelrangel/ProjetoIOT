@@ -13,7 +13,7 @@ O ecossistema do projeto IoT opera com dispositivos ESP32 equipados com rádio L
 2. **Ambiente de Compilação**:
    - `board = esp32dev` no `platformio.ini`, compatível com a família ESP32 LoRa.
 3. **Bibliotecas Subjacentes do Firmware**:
-   - `PubSubClient` (v2.8+) encapsulado dentro da implementação concreta `HiveMqAdapter`.
+   - `PubSubClient` (v2.8+) encapsulado dentro da implementação concreta `PubSubMqttAdapter` (chamada `HiveMqAdapter` até a revisão do [ADR 0005](0005-mosquitto-logical-device-id.md)).
    - `ArduinoJson` (v7+) para serialização e desserialização eficiente de payloads JSON estruturados.
 
 ## Consequências

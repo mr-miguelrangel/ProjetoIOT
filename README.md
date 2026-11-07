@@ -1,22 +1,23 @@
 # ProjetoIOT - Firmware ESP32 Gateway (MQTT / LoRa)
 
-Repositório de firmware para dispositivo IoT (ESP32 Master / Gateway) integrando protocolo MQTT com broker HiveMQ e preparação para roteamento de nós LoRa.
+Repositório do projeto IoT de monitoramento de estufa: firmware do ESP32 Master (Gateway), que recebe dados dos Workers por LoRa e os publica por MQTT, e a documentação da etapa de nuvem (Mosquitto, Node-RED, InfluxDB e Grafana em Docker).
 
 ## 📐 Arquitetura
 
 O projeto adota o padrão **Adapter** para isolar a lógica de comunicação da aplicação:
 - `include/domain/`: Interfaces puras e modelos de domínio (`IMqttAdapter.h`, `TelemetryPayload.h`, `Command.h`).
-- `include/infrastructure/` e `src/infrastructure/`: Implementação concreta do cliente MQTT com HiveMQ (`HiveMqAdapter.h`/`.cpp`).
+- `include/infrastructure/` e `src/infrastructure/`: Implementação concreta do cliente MQTT com a biblioteca PubSubClient (`PubSubMqttAdapter.h`/`.cpp`). Não depende de nenhum broker específico.
 - `src/main.cpp`: Ponto de entrada do firmware, ciclo de vida e orquestração.
 
 Para detalhes de design e evolução das decisões arquiteturais:
 - [Arquitetura do Sistema (diagrama, componentes, portas e protocolos)](docs/arquitetura.md)
+- [Contrato MQTT (tópicos, QoS, retain, payloads e ACL)](docs/mqtt-contrato.md)
 - [Glossário de Domínio (CONTEXT.md)](CONTEXT.md)
 - [ADR 0001 - Padrão Adapter para MQTT](docs/adr/0001-mqtt-adapter-pattern.md)
 - [ADR 0002 - PlatformIO, HiveMQ e Reconexão Não-Bloqueante](docs/adr/0002-platformio-hivemq-resilience.md)
 - [ADR 0003 - Alvo de Hardware, Tópicos e Isolamento de Credenciais](docs/adr/0003-esp32-lora-structure.md)
 - [ADR 0004 - Topologia Master-Worker e Libs do Firmware](docs/adr/0004-master-gateway-topology.md)
-- [ADR 0005 - HiveMQ Cloud com TLS e deviceId Lógico](docs/adr/0005-hivemq-cloud-logical-device-id.md)
+- [ADR 0005 - Mosquitto na VM com TLS e deviceId Lógico](docs/adr/0005-mosquitto-logical-device-id.md)
 
 ---
 
@@ -49,26 +50,35 @@ pio device monitor -b 115200
 
 ## 📡 Tópicos MQTT
 
-- **Telemetria**: `projetoiot/<deviceId>/telemetry`
-- **Comandos**: `projetoiot/<deviceId>/commands`
+A definição completa (QoS, retain, campos, faixas válidas e ACL) está no [Contrato MQTT](docs/mqtt-contrato.md). Resumo:
 
-O `deviceId` é um ID lógico ([ADR 0005](docs/adr/0005-hivemq-cloud-logical-device-id.md)): `estufa-01`, `estufa-02`, ... para os Workers LoRa e `gateway-01` para o Master. O broker alvo é o HiveMQ Cloud com TLS na porta 8883.
+| Tópico | Direção | Retain |
+|---|---|---|
+| `projetoiot/<deviceId>/telemetry` | Master → nuvem | Não |
+| `projetoiot/<deviceId>/commands` | Nuvem → Master | Nunca |
+| `projetoiot/<deviceId>/state` | Master → nuvem (estado dos atuadores) | Sim |
+| `projetoiot/<deviceId>/status` | Online/offline (LWT do Master e watchdog do Node-RED) | Sim |
 
-> **Estado atual do firmware:** o código ainda usa o HiveMQ público (`broker.hivemq.com:1883`, sem TLS) e o MAC do ESP32 como `deviceId`. A migração para o ADR 0005 está pendente.
+O `deviceId` é um ID lógico ([ADR 0005](docs/adr/0005-mosquitto-logical-device-id.md)): `estufa-01`, `estufa-02`, ... para os Workers LoRa e `gateway-01` para o Master.
+
+O broker é o **Mosquitto na VM**, com usuário e senha. O Master conecta na porta **8883** com TLS.
+
+> **Estado atual do firmware:** o código ainda não segue o contrato. Ele usa o HiveMQ público (`broker.hivemq.com:1883`, sem TLS e sem senha), o MAC do ESP32 como `deviceId` e o formato antigo de `data` (`sensor`/`value`/`unit`). A lista completa de diferenças está na [seção 6 do contrato](docs/mqtt-contrato.md#6-diferenças-em-relação-ao-firmware-atual).
 
 ### Exemplo de Payload de Telemetria (JSON)
 ```json
 {
   "deviceId": "estufa-01",
-  "timestamp": 123456,
+  "timestamp": 1794081600,
+  "seq": 1532,
   "data": {
-    "sensor": "temperatura",
-    "value": 24.5,
-    "unit": "C"
+    "temperature": 24.5,
+    "humidity": 61.0
   },
   "metadata": {
-    "rssi": -65,
-    "battery": 100
+    "rssi": -87,
+    "snr": 7.5,
+    "battery": 92
   }
 }
 ```
@@ -77,8 +87,12 @@ O `deviceId` é um ID lógico ([ADR 0005](docs/adr/0005-hivemq-cloud-logical-dev
 ```json
 {
   "deviceId": "estufa-01",
-  "action": "ping",
-  "params": {}
+  "commandId": "c-1794081600-001",
+  "action": "set",
+  "params": {
+    "actuator": "fan",
+    "value": true
+  }
 }
 ```
 
