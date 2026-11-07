@@ -10,11 +10,13 @@ O projeto adota o padrão **Adapter** para isolar a lógica de comunicação da 
 - `src/main.cpp`: Ponto de entrada do firmware, ciclo de vida e orquestração.
 
 Para detalhes de design e evolução das decisões arquiteturais:
+- [Arquitetura do Sistema (diagrama, componentes, portas e protocolos)](docs/arquitetura.md)
 - [Glossário de Domínio (CONTEXT.md)](CONTEXT.md)
 - [ADR 0001 - Padrão Adapter para MQTT](docs/adr/0001-mqtt-adapter-pattern.md)
 - [ADR 0002 - PlatformIO, HiveMQ e Reconexão Não-Bloqueante](docs/adr/0002-platformio-hivemq-resilience.md)
 - [ADR 0003 - Alvo de Hardware, Tópicos e Isolamento de Credenciais](docs/adr/0003-esp32-lora-structure.md)
 - [ADR 0004 - Topologia Master-Worker e Libs do Firmware](docs/adr/0004-master-gateway-topology.md)
+- [ADR 0005 - HiveMQ Cloud com TLS e deviceId Lógico](docs/adr/0005-hivemq-cloud-logical-device-id.md)
 
 ---
 
@@ -47,13 +49,17 @@ pio device monitor -b 115200
 
 ## 📡 Tópicos MQTT
 
-- **Telemetria**: `projetoiot/<MAC_DO_DISPOSITIVO>/telemetry`
-- **Comandos**: `projetoiot/<MAC_DO_DISPOSITIVO>/commands`
+- **Telemetria**: `projetoiot/<deviceId>/telemetry`
+- **Comandos**: `projetoiot/<deviceId>/commands`
+
+O `deviceId` é um ID lógico ([ADR 0005](docs/adr/0005-hivemq-cloud-logical-device-id.md)): `estufa-01`, `estufa-02`, ... para os Workers LoRa e `gateway-01` para o Master. O broker alvo é o HiveMQ Cloud com TLS na porta 8883.
+
+> **Estado atual do firmware:** o código ainda usa o HiveMQ público (`broker.hivemq.com:1883`, sem TLS) e o MAC do ESP32 como `deviceId`. A migração para o ADR 0005 está pendente.
 
 ### Exemplo de Payload de Telemetria (JSON)
 ```json
 {
-  "deviceId": "AA:BB:CC:DD:EE:FF",
+  "deviceId": "estufa-01",
   "timestamp": 123456,
   "data": {
     "sensor": "temperatura",
@@ -70,7 +76,7 @@ pio device monitor -b 115200
 ### Exemplo de Payload de Comando (JSON)
 ```json
 {
-  "deviceId": "AA:BB:CC:DD:EE:FF",
+  "deviceId": "estufa-01",
   "action": "ping",
   "params": {}
 }
