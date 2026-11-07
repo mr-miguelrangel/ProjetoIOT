@@ -1,5 +1,5 @@
-#ifndef INFRASTRUCTURE_HIVE_MQ_ADAPTER_H
-#define INFRASTRUCTURE_HIVE_MQ_ADAPTER_H
+#ifndef INFRASTRUCTURE_PUBSUB_MQTT_ADAPTER_H
+#define INFRASTRUCTURE_PUBSUB_MQTT_ADAPTER_H
 
 #include <WiFi.h>
 #include <PubSubClient.h>
@@ -8,7 +8,9 @@
 
 namespace Infrastructure {
 
-class HiveMqAdapter : public Domain::IMqttAdapter {
+// Implementação de IMqttAdapter com a biblioteca PubSubClient.
+// Não depende de nenhum broker específico (usada com o Mosquitto, ADR 0005).
+class PubSubMqttAdapter : public Domain::IMqttAdapter {
 private:
     WiFiClient _wifiClient;
     PubSubClient _mqttClient;
@@ -24,13 +26,13 @@ private:
 
     std::map<String, Domain::MessageCallback> _subscriptions;
 
-    static HiveMqAdapter* _instance;
+    static PubSubMqttAdapter* _instance;
     static void staticMqttCallback(char* topic, byte* payload, unsigned int length);
     void handleMqttMessage(char* topic, byte* payload, unsigned int length);
 
 public:
-    HiveMqAdapter(const String& host, uint16_t port, const String& clientId, 
-                  const String& user = "", const String& pass = "");
+    PubSubMqttAdapter(const String& host, uint16_t port, const String& clientId, 
+                      const String& user = "", const String& pass = "");
 
     void begin() override;
     bool connect() override;
@@ -44,4 +46,4 @@ public:
 
 } // namespace Infrastructure
 
-#endif // INFRASTRUCTURE_HIVE_MQ_ADAPTER_H
+#endif // INFRASTRUCTURE_PUBSUB_MQTT_ADAPTER_H
