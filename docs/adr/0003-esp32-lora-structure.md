@@ -1,7 +1,7 @@
 # ADR 0003: Alvo de Hardware ESP32 LoRa, Namespace de Tópicos e Isolamento de Credenciais
 
 ## Status
-Aceito
+Aceito. O formato dos tópicos continua válido, mas o `{deviceId}` passa a ser um ID lógico (ex.: `estufa-01`) e o broker passa a ser o HiveMQ Cloud, conforme o [ADR 0005](0005-hivemq-cloud-logical-device-id.md).
 
 ## Contexto
 Com a definição da arquitetura C++ baseada em PlatformIO e Adapter Pattern, foi necessário definir:
