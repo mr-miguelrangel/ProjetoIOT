@@ -1,7 +1,7 @@
 # ADR 0003: Alvo de Hardware ESP32 LoRa, Namespace de Tópicos e Isolamento de Credenciais
 
 ## Status
-Aceito. O formato dos tópicos continua válido, mas o `{deviceId}` passa a ser um ID lógico (ex.: `estufa-01`) e o broker passa a ser o HiveMQ Cloud, conforme o [ADR 0005](0005-hivemq-cloud-logical-device-id.md).
+Aceito. O formato dos tópicos continua válido, mas o `{deviceId}` passa a ser um ID lógico (ex.: `estufa-01`) e o broker passa a ser o Mosquitto na VM, conforme o [ADR 0005](0005-mosquitto-logical-device-id.md). O adapter citado no item 4 foi renomeado para `PubSubMqttAdapter`.
 
 ## Contexto
 Com a definição da arquitetura C++ baseada em PlatformIO e Adapter Pattern, foi necessário definir:
@@ -20,7 +20,7 @@ Com a definição da arquitetura C++ baseada em PlatformIO e Adapter Pattern, fo
    - `include/config.h` contendo SSID/senha reais mantido estritamente fora do controle de versão via `.gitignore`.
 4. **Estrutura Arquitetural**:
    - `include/domain/`: Interfaces puras C++ (`IMqttAdapter.h`, entidades `TelemetryPayload.h`, `Command.h`).
-   - `include/infrastructure/` e `src/infrastructure/`: Implementação concreta do cliente MQTT (`HiveMqAdapter.cpp`) e conectividade.
+   - `include/infrastructure/` e `src/infrastructure/`: Implementação concreta do cliente MQTT (`HiveMqAdapter.cpp`, hoje `PubSubMqttAdapter.cpp`) e conectividade.
    - `src/main.cpp`: Ponto de entrada, instanciação e orquestração.
 
 ## Consequências

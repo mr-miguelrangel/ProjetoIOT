@@ -11,10 +11,10 @@
 
 #include "domain/TelemetryPayload.h"
 #include "domain/Command.h"
-#include "infrastructure/HiveMqAdapter.h"
+#include "infrastructure/PubSubMqttAdapter.h"
 
 // Instância do Adaptador MQTT
-Infrastructure::HiveMqAdapter mqttAdapter(
+Infrastructure::PubSubMqttAdapter mqttAdapter(
     MQTT_BROKER_HOST,
     MQTT_BROKER_PORT,
     MQTT_CLIENT_ID

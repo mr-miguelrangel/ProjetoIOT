@@ -1,10 +1,10 @@
-#include "infrastructure/HiveMqAdapter.h"
+#include "infrastructure/PubSubMqttAdapter.h"
 
 namespace Infrastructure {
 
-HiveMqAdapter* HiveMqAdapter::_instance = nullptr;
+PubSubMqttAdapter* PubSubMqttAdapter::_instance = nullptr;
 
-HiveMqAdapter::HiveMqAdapter(const String& host, uint16_t port, const String& clientId, 
+PubSubMqttAdapter::PubSubMqttAdapter(const String& host, uint16_t port, const String& clientId, 
                              const String& user, const String& pass)
     : _brokerHost(host),
       _brokerPort(port),
@@ -17,13 +17,13 @@ HiveMqAdapter::HiveMqAdapter(const String& host, uint16_t port, const String& cl
     _instance = this;
 }
 
-void HiveMqAdapter::staticMqttCallback(char* topic, byte* payload, unsigned int length) {
+void PubSubMqttAdapter::staticMqttCallback(char* topic, byte* payload, unsigned int length) {
     if (_instance) {
         _instance->handleMqttMessage(topic, payload, length);
     }
 }
 
-void HiveMqAdapter::handleMqttMessage(char* topic, byte* payload, unsigned int length) {
+void PubSubMqttAdapter::handleMqttMessage(char* topic, byte* payload, unsigned int length) {
     String topicStr = String(topic);
     String payloadStr;
     payloadStr.reserve(length);
@@ -39,12 +39,12 @@ void HiveMqAdapter::handleMqttMessage(char* topic, byte* payload, unsigned int l
     }
 }
 
-void HiveMqAdapter::begin() {
+void PubSubMqttAdapter::begin() {
     _mqttClient.setServer(_brokerHost.c_str(), _brokerPort);
-    _mqttClient.setCallback(HiveMqAdapter::staticMqttCallback);
+    _mqttClient.setCallback(PubSubMqttAdapter::staticMqttCallback);
 }
 
-bool HiveMqAdapter::connect() {
+bool PubSubMqttAdapter::connect() {
     if (_mqttClient.connected()) {
         return true;
     }
@@ -57,7 +57,7 @@ bool HiveMqAdapter::connect() {
     }
 
     if (success) {
-        Serial.println("[MQTT] Conectado com sucesso ao Broker HiveMQ!");
+        Serial.println("[MQTT] Conectado com sucesso ao broker!");
         // Reinscrever tópicos existentes
         for (const auto& pair : _subscriptions) {
             _mqttClient.subscribe(pair.first.c_str());
@@ -69,15 +69,15 @@ bool HiveMqAdapter::connect() {
     return success;
 }
 
-void HiveMqAdapter::disconnect() {
+void PubSubMqttAdapter::disconnect() {
     _mqttClient.disconnect();
 }
 
-bool HiveMqAdapter::isConnected() {
+bool PubSubMqttAdapter::isConnected() {
     return _mqttClient.connected();
 }
 
-void HiveMqAdapter::loop() {
+void PubSubMqttAdapter::loop() {
     if (WiFi.status() != WL_CONNECTED) {
         return; // Aguarda estabilidade do Wi-Fi
     }
@@ -95,7 +95,7 @@ void HiveMqAdapter::loop() {
     }
 }
 
-bool HiveMqAdapter::publish(const String& topic, const String& payload, int qos, bool retain) {
+bool PubSubMqttAdapter::publish(const String& topic, const String& payload, int qos, bool retain) {
     if (!_mqttClient.connected()) {
         Serial.println("[MQTT] Não é possível publicar: desconectado.");
         return false;
@@ -105,7 +105,7 @@ bool HiveMqAdapter::publish(const String& topic, const String& payload, int qos,
     return _mqttClient.publish(topic.c_str(), payload.c_str(), retain);
 }
 
-bool HiveMqAdapter::subscribe(const String& topic, Domain::MessageCallback callback) {
+bool PubSubMqttAdapter::subscribe(const String& topic, Domain::MessageCallback callback) {
     _subscriptions[topic] = callback;
 
     if (_mqttClient.connected()) {

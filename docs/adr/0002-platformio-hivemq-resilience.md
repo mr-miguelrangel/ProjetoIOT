@@ -1,7 +1,7 @@
 # ADR 0002: Toolchain PlatformIO, HiveMQ Público e Resiliência Não-Bloqueante
 
 ## Status
-Aceito. O item 2 (broker inicial) foi substituído pelo [ADR 0005](0005-hivemq-cloud-logical-device-id.md): o broker alvo passa a ser o HiveMQ Cloud com TLS na 8883.
+Aceito. O item 2 (broker inicial) foi substituído pelo [ADR 0005](0005-mosquitto-logical-device-id.md): o broker alvo passa a ser o Mosquitto na VM, com TLS na 8883.
 
 ## Contexto
 Para implementar o firmware C++ com o MQTT Adapter definido no ADR 0001, é necessário estabelecer:
