@@ -1,0 +1,88 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: iot-mosquitto
+    restart: unless-stopped
+    ports:
+      - "8883:8883"
+    volumes:
+      - ./infra/mosquitto/config:/mosquitto/config:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    networks:
+      - iot-network
+
+  nodered:
+    image: nodered/node-red:latest
+    container_name: iot-nodered
+    restart: unless-stopped
+    environment:
+      - TZ=America/Sao_Paulo
+    volumes:
+      - nodered_data:/data
+    networks:
+      - iot-network
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: iot-influxdb
+    restart: unless-stopped
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=${DOCKER_INFLUXDB_INIT_MODE:-setup}
+      - DOCKER_INFLUXDB_INIT_USERNAME=${DOCKER_INFLUXDB_INIT_USERNAME:-admin}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${DOCKER_INFLUXDB_INIT_PASSWORD:-adminpassword123}
+      - DOCKER_INFLUXDB_INIT_ORG=${DOCKER_INFLUXDB_INIT_ORG:-projetoiot}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${DOCKER_INFLUXDB_INIT_BUCKET:-telemetria}
+      - DOCKER_INFLUXDB_INIT_RETENTION=${DOCKER_INFLUXDB_INIT_RETENTION:-30d}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${DOCKER_INFLUXDB_INIT_ADMIN_TOKEN:-my-super-secret-admin-token-12345}
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+    networks:
+      - iot-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: iot-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-adminpassword123}
+      - GF_SERVER_ROOT_URL=https://grafana.${DOMAIN:-localhost}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - iot-network
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: iot-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+      - ACME_EMAIL=${ACME_EMAIL:-admin@example.com}
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - iot-network
+    depends_on:
+      - nodered
+      - grafana
+
+networks:
+  iot-network:
+    name: iot-network
+    driver: bridge
+
+volumes:
+  mosquitto_data:
+  mosquitto_log:
+  nodered_data:
+  influxdb_data:
+  grafana_data:
+  caddy_data:
+  caddy_config:
