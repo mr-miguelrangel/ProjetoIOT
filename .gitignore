@@ -12,4 +12,8 @@ include/config.h
 *.elf
 *.bin
 *.hex
+compile_commands.json
+
+# Ambiente Docker / Infra
+.env
 

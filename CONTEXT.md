@@ -35,3 +35,10 @@ Contrato JSON padronizado que encapsula o estado ou leitura de sensores:
 ### Reconexão Não-Bloqueante (Non-blocking Reconnect)
 Estratégia de resiliência onde a perda de conexão com o broker não bloqueia a execução do ciclo de leitura local do microcontrolador, utilizando tentativas periódicas com backoff.
 
+### Proxy Reverso (Reverse Proxy)
+Servidor intermediário (Caddy) posicionado na borda da infraestrutura em nuvem que recebe as conexões HTTPS externas (:443/:80) e as encaminha internamente para os serviços da rede Docker (Node-RED e Grafana), gerenciando certificados TLS de forma automática.
+
+### Roteamento por Subdomínio (Subdomain Routing)
+Estratégia onde cada serviço web interno é mapeado para um nome de host dedicado (ex.: `nodered.localhost` / `grafana.localhost` ou subdomínios sob um domínio público), isolando o contexto de caminhos, cookies e assets estáticos sem necessidade de reescritas de URL base.
+
+
