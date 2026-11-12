@@ -18,6 +18,8 @@ Para detalhes de design e evolução das decisões arquiteturais:
 - [ADR 0003 - Alvo de Hardware, Tópicos e Isolamento de Credenciais](docs/adr/0003-esp32-lora-structure.md)
 - [ADR 0004 - Topologia Master-Worker e Libs do Firmware](docs/adr/0004-master-gateway-topology.md)
 - [ADR 0005 - Mosquitto na VM com TLS e deviceId Lógico](docs/adr/0005-mosquitto-logical-device-id.md)
+- [ADR 0006 - VM na AWS EC2 com SSH só por chave](docs/adr/0006-vm-aws-ec2.md)
+- [VM na nuvem: criação, firewall e verificação (T05)](docs/vm.md)
 
 ---
 

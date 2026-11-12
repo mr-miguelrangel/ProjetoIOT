@@ -1,0 +1,48 @@
+#cloud-config
+# Configuração do primeiro boot da VM do ProjetoIOT (T05).
+# Ubuntu Server 24.04 LTS na AWS EC2. Passo a passo em docs/vm.md.
+#
+# Uso: colar o arquivo inteiro em "Detalhes avançados > Dados do usuário" ao executar a instância.
+# O cloud-init só aplica este arquivo no primeiro boot.
+#
+# A chave SSH não fica aqui. Ela vem do par de chaves importado na AWS e vai para o usuário "ubuntu".
+
+# Atualiza os pacotes e reinicia a VM uma vez, se a atualização pedir.
+package_update: true
+package_upgrade: true
+package_reboot_if_required: true
+
+packages:
+  - ufw
+
+# Swap de 2 GiB. A t3.small tem 2 GiB de RAM, e a stack da T06 roda cinco containers.
+swap:
+  filename: /swapfile
+  size: 2G
+
+write_files:
+  # SSH só por chave e sem login de root.
+  # O sshd fica com o primeiro valor que lê para cada opção, e os arquivos de sshd_config.d
+  # são lidos em ordem alfabética, antes do sshd_config. Por isso o nome começa com 00.
+  - path: /etc/ssh/sshd_config.d/00-projetoiot.conf
+    owner: root:root
+    permissions: "0644"
+    content: |
+      # Gerado pelo cloud-init da T05 (infra/vm/cloud-init.yaml no repositorio).
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+      PubkeyAuthentication yes
+      AuthenticationMethods publickey
+
+runcmd:
+  # Firewall da VM com as mesmas portas do grupo de segurança da AWS.
+  # O grupo de segurança é a barreira principal, porque o Docker ignora o ufw nas portas que publica.
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp comment 'SSH (so chave)'
+  - ufw allow 443/tcp comment 'HTTPS (Caddy)'
+  - ufw allow 8883/tcp comment 'MQTT com TLS (Mosquitto)'
+  - ufw --force enable
+  # Reinicia o SSH só se a configuração for válida, para não perder o acesso.
+  - sshd -t && systemctl restart ssh
