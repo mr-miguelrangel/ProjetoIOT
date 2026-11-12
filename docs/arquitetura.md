@@ -126,6 +126,7 @@ Resumo. A definição completa, com QoS, retain, payloads e ACL, está no [contr
    - Master: `gateway-01`, usado como identidade do cliente MQTT (usuário, ACL, LWT).
    - Motivo: o ID continua o mesmo se uma placa for trocada, é legível nos dashboards e serve direto como tag no InfluxDB e como chave da ACL.
 4. **Stack de nuvem em Docker Compose** na VM: Mosquitto, Node-RED, InfluxDB, Grafana e Caddy. Só o Caddy (443) e o Mosquitto (8883) ficam expostos.
+5. **VM na AWS EC2** (`t3.small` em Ohio, `us-east-2`, plano Free), com SSH só por chave e firewall no grupo de segurança e no `ufw` ([ADR 0006](adr/0006-vm-aws-ec2.md), passo a passo em [vm.md](vm.md)). Decidido na T05.
 
 ## Impacto no kanban
 
