@@ -20,7 +20,13 @@ services:
     restart: unless-stopped
     environment:
       - TZ=America/Sao_Paulo
+      - NODE_RED_CREDENTIAL_SECRET=${NODE_RED_CREDENTIAL_SECRET:-projetoiot-super-secret-key-change-me}
+      - NODE_RED_ADMIN_USER=${NODE_RED_ADMIN_USER:-admin}
+      - NODE_RED_ADMIN_PASSWORD_HASH=${NODE_RED_ADMIN_PASSWORD_HASH:-$2b$08$0P/7fEGBU3W2xq52D6BtPe/9xxBQOp4lH22/xIbDBv3jOfT3EsURS}
+      - NODE_RED_HTTP_NODE_USER=${NODE_RED_HTTP_NODE_USER:-viewer}
+      - NODE_RED_HTTP_NODE_PASSWORD_HASH=${NODE_RED_HTTP_NODE_PASSWORD_HASH:-$2b$08$0P/7fEGBU3W2xq52D6BtPe/9xxBQOp4lH22/xIbDBv3jOfT3EsURS}
     volumes:
+      - ./infra/nodered/settings.js:/data/settings.js:ro
       - nodered_data:/data
     networks:
       - iot-network
