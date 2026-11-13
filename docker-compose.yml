@@ -1,3 +1,10 @@
+# Stack da nuvem do ProjetoIOT (T06). Decisões na docs/adr/0007-docker-compose-stack.md.
+#
+# Só a 443 (Caddy) e a 8883 (Mosquitto) são publicadas no host. O Docker passa por cima do ufw
+# nas portas publicadas, então nenhuma outra porta pode aparecer em "ports" (docs/vm.md).
+#
+# As senhas não têm valor padrão: sem o .env preenchido, o "docker compose up" para com erro.
+
 services:
   mosquitto:
     image: eclipse-mosquitto:2.0
@@ -15,7 +22,7 @@ services:
       - iot-network
 
   nodered:
-    image: nodered/node-red:latest
+    image: nodered/node-red:5.0.9
     container_name: iot-nodered
     restart: unless-stopped
     environment:
@@ -25,6 +32,9 @@ services:
       - NODE_RED_ADMIN_PASSWORD_HASH=${NODE_RED_ADMIN_PASSWORD_HASH:-$2b$08$0P/7fEGBU3W2xq52D6BtPe/9xxBQOp4lH22/xIbDBv3jOfT3EsURS}
       - NODE_RED_HTTP_NODE_USER=${NODE_RED_HTTP_NODE_USER:-viewer}
       - NODE_RED_HTTP_NODE_PASSWORD_HASH=${NODE_RED_HTTP_NODE_PASSWORD_HASH:-$2b$08$0P/7fEGBU3W2xq52D6BtPe/9xxBQOp4lH22/xIbDBv3jOfT3EsURS}
+      - NODE_RED_ADMIN_USER=${NODE_RED_ADMIN_USER:-admin}
+      - NODE_RED_ADMIN_PASSWORD=${NODE_RED_ADMIN_PASSWORD:?defina NODE_RED_ADMIN_PASSWORD no .env}
+      - NODE_RED_CREDENTIAL_SECRET=${NODE_RED_CREDENTIAL_SECRET:?defina NODE_RED_CREDENTIAL_SECRET no .env}
     volumes:
       - ./infra/nodered/settings.js:/data/settings.js:ro
       - nodered_data:/data
@@ -38,23 +48,23 @@ services:
     environment:
       - DOCKER_INFLUXDB_INIT_MODE=${DOCKER_INFLUXDB_INIT_MODE:-setup}
       - DOCKER_INFLUXDB_INIT_USERNAME=${DOCKER_INFLUXDB_INIT_USERNAME:-admin}
-      - DOCKER_INFLUXDB_INIT_PASSWORD=${DOCKER_INFLUXDB_INIT_PASSWORD:-adminpassword123}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${DOCKER_INFLUXDB_INIT_PASSWORD:?defina DOCKER_INFLUXDB_INIT_PASSWORD no .env}
       - DOCKER_INFLUXDB_INIT_ORG=${DOCKER_INFLUXDB_INIT_ORG:-projetoiot}
       - DOCKER_INFLUXDB_INIT_BUCKET=${DOCKER_INFLUXDB_INIT_BUCKET:-telemetria}
       - DOCKER_INFLUXDB_INIT_RETENTION=${DOCKER_INFLUXDB_INIT_RETENTION:-30d}
-      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${DOCKER_INFLUXDB_INIT_ADMIN_TOKEN:-my-super-secret-admin-token-12345}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${DOCKER_INFLUXDB_INIT_ADMIN_TOKEN:?defina DOCKER_INFLUXDB_INIT_ADMIN_TOKEN no .env}
     volumes:
       - influxdb_data:/var/lib/influxdb2
     networks:
       - iot-network
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:13.3.1
     container_name: iot-grafana
     restart: unless-stopped
     environment:
       - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-adminpassword123}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:?defina GF_SECURITY_ADMIN_PASSWORD no .env}
       - GF_SERVER_ROOT_URL=https://grafana.${DOMAIN:-localhost}
     volumes:
       - grafana_data:/var/lib/grafana
@@ -65,8 +75,8 @@ services:
     image: caddy:2-alpine
     container_name: iot-caddy
     restart: unless-stopped
+    # Só a 443. A 80 fica fechada (T05); o certificado sai pelo desafio TLS-ALPN, na própria 443.
     ports:
-      - "80:80"
       - "443:443"
     environment:
       - DOMAIN=${DOMAIN:-localhost}
