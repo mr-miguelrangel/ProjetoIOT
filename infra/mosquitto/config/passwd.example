@@ -1,0 +1,15 @@
+# Modelo de password_file do Mosquitto (formato: usuario:hash_senha_sha512pbkdf2)
+# NÃO COLOQUE SENHAS REAIS NESTE ARQUIVO DE EXEMPLO.
+# 
+# Para gerar ou atualizar as senhas com hash na VM ou ambiente de deploy:
+#   docker run --rm -it -v $(pwd)/infra/mosquitto/config:/mosquitto/config eclipse-mosquitto:2.0 \
+#     mosquitto_passwd -c /mosquitto/config/passwd gateway-01
+#   docker run --rm -it -v $(pwd)/infra/mosquitto/config:/mosquitto/config eclipse-mosquitto:2.0 \
+#     mosquitto_passwd -b /mosquitto/config/passwd nodered SUA_SENHA_NODRED
+#   docker run --rm -it -v $(pwd)/infra/mosquitto/config:/mosquitto/config eclipse-mosquitto:2.0 \
+#     mosquitto_passwd -b /mosquitto/config/passwd dev-mqttx SUA_SENHA_TESTE
+#
+# Usuários obrigatórios de acordo com docs/mqtt-contrato.md:
+# - gateway-01
+# - nodered
+# - dev-mqttx

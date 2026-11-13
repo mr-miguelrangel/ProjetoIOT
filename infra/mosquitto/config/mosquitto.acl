@@ -1,0 +1,22 @@
+# ==============================================================================
+# Mosquitto Access Control List (ACL) - T07
+# Conforme especificado em docs/mqtt-contrato.md (Seção 5)
+# ==============================================================================
+
+# Master Gateway (ESP32)
+user gateway-01
+topic write projetoiot/+/telemetry
+topic write projetoiot/+/state
+topic write projetoiot/gateway-01/status
+topic read  projetoiot/+/commands
+
+# Node-RED (Orquestrador / Watchdog)
+user nodered
+topic read      projetoiot/+/telemetry
+topic read      projetoiot/+/state
+topic readwrite projetoiot/+/status
+topic write     projetoiot/+/commands
+
+# Ambiente de testes e validação (MQTTX / Wokwi / T11)
+user dev-mqttx
+topic readwrite projetoiot/#
