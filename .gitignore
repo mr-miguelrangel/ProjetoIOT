@@ -18,4 +18,10 @@ compile_commands.json
 .env
 infra/mosquitto/config/passwd
 !infra/mosquitto/config/passwd.example
+infra/mosquitto/certs/*.key
+infra/mosquitto/certs/*.crt
+infra/mosquitto/certs/*.csr
+infra/mosquitto/certs/*.srl
+infra/mosquitto/certs/*.ext
+!infra/mosquitto/certs/generate-certs.sh
 
