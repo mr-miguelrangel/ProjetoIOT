@@ -211,7 +211,86 @@ Preencher depois de criar a VM. Não deixem o IP nem o número da conta AWS apar
 (colar aqui a saída do verificar-vm.ps1)
 ```
 
+## Deploy da stack (T06)
+
+As decisões estão na [ADR 0007](adr/0007-docker-compose-stack.md). Os comandos abaixo rodam dentro da VM (`ssh projetoiot-vm`).
+
+### 1. Instalar o Docker
+
+Pelo repositório oficial do Docker, que traz o plugin do Compose v2 ([Docker](https://docs.docker.com/engine/install/ubuntu/)):
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Permite rodar "docker" sem sudo. Vale a partir do próximo login.
+sudo usermod -aG docker ubuntu
+exit
+```
+
+Entre de novo e confira com `docker compose version`.
+
+O usuário do grupo `docker` tem, na prática, acesso de root na VM. Como só a dupla entra por SSH, isso é aceitável.
+
+### 2. Baixar o repositório e criar o `.env`
+
+```bash
+git clone https://github.com/mr-miguelrangel/ProjetoIOT.git
+cd ProjetoIOT
+cp .env.example .env
+chmod 600 .env
+```
+
+Gere um valor para cada campo vazio e cole no `.env` com `nano .env`:
+
+```bash
+openssl rand -base64 24   # NODE_RED_ADMIN_PASSWORD, DOCKER_INFLUXDB_INIT_PASSWORD, GF_SECURITY_ADMIN_PASSWORD
+openssl rand -hex 32      # NODE_RED_CREDENTIAL_SECRET, DOCKER_INFLUXDB_INIT_ADMIN_TOKEN
+```
+
+Guardem as senhas num gerenciador de senhas. O `.env` só existe na VM e não vai para o Git. Até a T08, deixe `DOMAIN=localhost`.
+
+### 3. Subir a stack
+
+```bash
+docker compose up -d
+docker compose ps
+```
+
+Os cinco containers precisam aparecer como `Up`, e a coluna de portas só pode mostrar a `443` (Caddy) e a `8883` (Mosquitto). Se faltar algum campo no `.env`, o compose para com a mensagem `defina ... no .env`.
+
+Como todos os containers usam `restart: unless-stopped`, a stack volta sozinha quando a VM reinicia.
+
+Para atualizar depois de um `git pull`: `docker compose up -d` de novo. O Docker só recria os containers que mudaram.
+
+### 4. Verificar
+
+No seu PC, o `verificar-vm.ps1` precisa terminar com `Tudo certo`, agora com a 443 e a 8883 como `aberta`. A 8883 aceita a conexão TCP, mas o MQTT com TLS só funciona depois da T09.
+
+Para abrir o Node-RED e o Grafana antes do domínio da T08, use um túnel SSH. O navegador resolve qualquer `*.localhost` para o próprio PC, e o túnel leva a conexão até a 443 da VM:
+
+```powershell
+ssh -N -L 8443:localhost:443 projetoiot-vm
+```
+
+Com o túnel aberto, acesse `https://nodered.localhost:8443` e `https://grafana.localhost:8443`. O navegador avisa que o certificado não é confiável, porque é o certificado interno do Caddy. Isso é esperado até a T08.
+
+| Verificação | Esperado |
+|---|---|
+| Editor do Node-RED | Pede usuário e senha (`NODE_RED_ADMIN_USER` e `NODE_RED_ADMIN_PASSWORD`) |
+| `https://nodered.localhost:8443/flows` sem login | `401` |
+| Grafana | Entra com `GF_SECURITY_ADMIN_USER` e `GF_SECURITY_ADMIN_PASSWORD`; `admin`/`adminpassword123` é recusado |
+| `docker compose ps` | Cinco containers `Up`, só 443 e 8883 publicadas |
+
 ## Próximos passos
 
-- **T06**: instalar o Docker e publicar no `docker-compose.yml` só a 443 (Caddy) e a 8883 (Mosquitto).
-- **T08**: apontar o domínio (por exemplo, um subdomínio gratuito do DuckDNS) para o IP elástico.
+- **T07**: usuários e ACL no Mosquitto ([contrato MQTT, seção 5](mqtt-contrato.md#5-permissões-no-mosquitto-t07)).
+- **T08**: apontar o domínio (por exemplo, um subdomínio gratuito do DuckDNS) para o IP elástico e trocar o `DOMAIN` no `.env`.
+- **T09**: ativar o listener 8883 com TLS no `mosquitto.conf`.
