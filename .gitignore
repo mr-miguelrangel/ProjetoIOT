@@ -16,4 +16,6 @@ compile_commands.json
 
 # Ambiente Docker / Infra
 .env
+infra/mosquitto/config/passwd
+!infra/mosquitto/config/passwd.example
 
