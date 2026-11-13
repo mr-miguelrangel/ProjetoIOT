@@ -18,6 +18,10 @@ Para detalhes de design e evolução das decisões arquiteturais:
 - [ADR 0003 - Alvo de Hardware, Tópicos e Isolamento de Credenciais](docs/adr/0003-esp32-lora-structure.md)
 - [ADR 0004 - Topologia Master-Worker e Libs do Firmware](docs/adr/0004-master-gateway-topology.md)
 - [ADR 0005 - Mosquitto na VM com TLS e deviceId Lógico](docs/adr/0005-mosquitto-logical-device-id.md)
+- [ADR 0006 - VM na AWS EC2 com SSH só por chave](docs/adr/0006-vm-aws-ec2.md)
+- [ADR 0007 - Stack da nuvem com Docker Compose](docs/adr/0007-docker-compose-stack.md)
+- [ADR 0008 - Caddy com HTTPS e subdomínios](docs/adr/0008-caddy-subdomains-https.md)
+- [VM na nuvem: criação, firewall, verificação (T05) e deploy da stack (T06)](docs/vm.md)
 
 ---
 
