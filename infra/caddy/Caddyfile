@@ -10,3 +10,8 @@ grafana.{$DOMAIN:localhost} {
     reverse_proxy grafana:3000
 }
 
+# Certificado gerenciado pelo Caddy para o Broker MQTT (T09)
+mqtt.{$DOMAIN:localhost} {
+    respond "MQTT Broker endpoint - TLS via port 8883" 200
+}
+

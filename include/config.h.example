@@ -5,10 +5,27 @@
 #define WIFI_SSID "REDE"
 #define WIFI_PASSWORD "SENHA"
 
-// Configurações do Broker MQTT (HiveMQ Público)
-#define MQTT_BROKER_HOST "broker.hivemq.com"
-#define MQTT_BROKER_PORT 1883
-#define MQTT_CLIENT_ID "ESP32_Master_Gateway_Default"
+// Configurações do Broker MQTT Seguro (Mosquitto TLS - T07 / T09)
+#define MQTT_BROKER_HOST "mqtt.seudominio.com"
+#define MQTT_BROKER_PORT 8883
+#define MQTT_CLIENT_ID "gateway-01"
+#define MQTT_USER "gateway-01"
+#define MQTT_PASSWORD "suasenha_aqui"
+
+// Certificado CA Root (ex: Let's Encrypt ISRG Root X1 para produção ou ca.crt para testes)
+// O certificado garante a integridade da conexão TLS (T09)
+static const char* MQTT_ROOT_CA = \
+"-----BEGIN CERTIFICATE-----\n" \
+"MIIFazCCA1OgAwIBAgIRAIIQz7dsQONZRGPgu2OcIwAwDQYJKoZIhvcNAQELBQAw\n" \
+"TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh\n" \
+"cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4\n" \
+"WhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJu\n" \
+"ZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBY\n" \
+"MTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygc\n" \
+"h77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+\n" \
+"0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6U\n" \
+"A5/TR5d8S5JlCd+26VguZvN0tOHbea+qETVxTkdV6umP9kjeP8CRK媒介/...\n" \
+"-----END CERTIFICATE-----\n";
 
 // Namespace de Tópicos
 #define MQTT_TOPIC_PREFIX "projetoiot"
