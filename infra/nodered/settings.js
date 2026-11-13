@@ -1,59 +1,13 @@
-/**
- * Configuração personalizada do Node-RED para o ProjetoIOT (T10)
- * Controla autenticação do editor (adminAuth), endpoints HTTP (httpNodeAuth)
- * e criptografia de credenciais (credentialSecret).
- */
-module.exports = {
-    // Porta e escuta
-    uiPort: process.env.PORT || 1880,
-    uiHost: "0.0.0.0",
-
-    // Chave secreta para criptografia de credenciais (flows_cred.json)
-    // Impede o uso de chave aleatória no primeiro boot garantindo reprodutibilidade
-    credentialSecret: process.env.NODE_RED_CREDENTIAL_SECRET || "projetoiot-super-secret-key-change-me",
-
-    // Autenticação do Editor (adminAuth)
-    adminAuth: {
-        type: "credentials",
-        users: [
-            {
-                username: process.env.NODE_RED_ADMIN_USER || "admin",
-                // Hash bcrypt gerado para a senha padrão de fallback: 'adminpassword123'
-                password: process.env.NODE_RED_ADMIN_PASSWORD_HASH || "$2b$08$0P/7fEGBU3W2xq52D6BtPe/9xxBQOp4lH22/xIbDBv3jOfT3EsURS",
-                permissions: "*"
-            }
-        ]
-    },
-
-    // Autenticação básica para nós HTTP In / Dashboard (httpNodeAuth)
-    // Protege as telas de dashboard operacional e endpoints REST contra acesso anônimo
-    httpNodeAuth: {
-        user: process.env.NODE_RED_HTTP_NODE_USER || "viewer",
-        // Hash bcrypt gerado para a senha padrão de fallback: 'adminpassword123'
-        pass: process.env.NODE_RED_HTTP_NODE_PASSWORD_HASH || "$2b$08$0P/7fEGBU3W2xq52D6BtPe/9xxBQOp4lH22/xIbDBv3jOfT3EsURS"
-    },
-
-    // Configurações de logging
-    logging: {
-        console: {
-            level: "info",
-            metrics: false,
-            audit: true
-        }
-    },
-
-    // Editor e contexto
-    editorTheme: {
-        projects: {
-            enabled: false // Será habilitado na T26
-        }
-    }
-// Configuração do Node-RED do ProjetoIOT.
+// Configuração do Node-RED do ProjetoIOT (T06 e T10).
 // O docker-compose.yml monta este arquivo em /data/settings.js (somente leitura).
 // Opções que não aparecem aqui ficam com o valor padrão do Node-RED.
+// Decisões na docs/adr/0010-nodered-auth-security.md.
 //
-// O editor fica atrás do Caddy na 443, aberta para a internet, então ele exige login.
-// Usuário, senha e segredo das credenciais vêm do .env (ver .env.example).
+// O Node-RED fica atrás do Caddy na 443, aberta para a internet. Por isso:
+//   - o editor e a API de administração exigem login (adminAuth);
+//   - os nós "http in" e o dashboard exigem outro login, só de leitura (httpNodeAuth);
+//   - as credenciais salvas nos fluxos são cifradas com uma chave fixa (credentialSecret).
+// Usuários, senhas e a chave vêm do .env (ver .env.example). Não há valor padrão para senha.
 
 const crypto = require("crypto");
 
@@ -65,11 +19,12 @@ function obrigatoria(nome) {
     return valor;
 }
 
-const ADMIN_USER = obrigatoria("NODE_RED_ADMIN_USER");
-const ADMIN_PASSWORD = obrigatoria("NODE_RED_ADMIN_PASSWORD");
-
-if (ADMIN_PASSWORD.length < 12) {
-    throw new Error("NODE_RED_ADMIN_PASSWORD precisa ter pelo menos 12 caracteres.");
+function senhaObrigatoria(nome) {
+    const valor = obrigatoria(nome);
+    if (valor.length < 12) {
+        throw new Error(`${nome} precisa ter pelo menos 12 caracteres.`);
+    }
+    return valor;
 }
 
 // Compara em tempo constante. Os dois lados passam pelo SHA-256 para terem o mesmo tamanho,
@@ -80,7 +35,39 @@ function iguais(a, b) {
     return crypto.timingSafeEqual(ha, hb);
 }
 
+const ADMIN_USER = obrigatoria("NODE_RED_ADMIN_USER");
+const ADMIN_PASSWORD = senhaObrigatoria("NODE_RED_ADMIN_PASSWORD");
+const HTTP_NODE_USER = obrigatoria("NODE_RED_HTTP_NODE_USER");
+const HTTP_NODE_PASSWORD = senhaObrigatoria("NODE_RED_HTTP_NODE_PASSWORD");
+
+if (iguais(HTTP_NODE_PASSWORD, ADMIN_PASSWORD)) {
+    throw new Error("NODE_RED_HTTP_NODE_PASSWORD precisa ser diferente de NODE_RED_ADMIN_PASSWORD.");
+}
+
 const admin = { username: ADMIN_USER, permissions: "*" };
+
+// Autenticação básica (HTTP Basic) para os nós "http in" e o dashboard.
+// O Node-RED aplica esta função na httpNodeRoot, depois das rotas do editor, então ela
+// não afeta o login do editor. Requisições OPTIONS passam, como no httpNodeAuth padrão.
+function autenticacaoBasica(req, res, next) {
+    if (req.method === "OPTIONS") {
+        return next();
+    }
+    const [tipo, valor] = (req.headers.authorization || "").split(" ");
+    if (tipo === "Basic" && valor) {
+        const texto = Buffer.from(valor, "base64").toString("utf8");
+        const separador = texto.indexOf(":");
+        if (separador >= 0) {
+            const usuarioOk = iguais(texto.slice(0, separador), HTTP_NODE_USER);
+            const senhaOk = iguais(texto.slice(separador + 1), HTTP_NODE_PASSWORD);
+            if (usuarioOk && senhaOk) {
+                return next();
+            }
+        }
+    }
+    res.set("WWW-Authenticate", 'Basic realm="ProjetoIOT", charset="UTF-8"');
+    return res.sendStatus(401);
+}
 
 module.exports = {
     uiPort: 1880,
@@ -102,7 +89,15 @@ module.exports = {
         },
     },
 
+    // Login dos nós "http in" e do dashboard.
+    httpNodeAuth: autenticacaoBasica,
+
     logging: {
-        console: { level: "info", metrics: false, audit: false },
+        // audit registra cada chamada à API de administração (login, deploy), útil para rastrear acessos.
+        console: { level: "info", metrics: false, audit: true },
+    },
+
+    editorTheme: {
+        projects: { enabled: false },
     },
 };
