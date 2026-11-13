@@ -22,13 +22,14 @@ Restrição vinda da [ADR 0006](0006-vm-aws-ec2.md): o Docker cria regras de ipt
 2. **Topologia de Rede**:
    - Criação de uma rede de ponte interna (`iot-network`).
    - Serviços internos (Node-RED, InfluxDB, Grafana e porta 1883 do Mosquitto) comunicam-se via DNS interno do Docker, sem expor portas diretamente ao host da VM.
-   - **Apenas a 443 (Caddy) e a 8883 (Mosquitto) são publicadas no host**, as mesmas portas liberadas no firewall da T05. A 80 não é publicada: o Caddy emite o certificado pelo desafio TLS-ALPN, na própria 443 ([ADR 0008](0008-caddy-subdomains-https.md)).
-   - Até a T09, o Mosquitto só escuta na 1883. A 8883 fica publicada, mas uma conexão nela é aceita pelo Docker e fechada logo em seguida, porque não há listener.
+   - **Apenas a 443 (Caddy) e a 8883 (Mosquitto) são publicadas no host**, as mesmas portas liberadas no firewall da T05. A 80 não é publicada: o Caddy emite o certificado pelo desafio TLS-ALPN, na própria 443 ([ADR 0011](0011-caddy-subdomains-https.md)).
+   - Na 8883, o Mosquitto só aceita conexões com TLS ([ADR 0009](0009-mosquitto-tls-8883.md)). A 1883, sem TLS, fica só na rede interna.
 3. **Resiliência e Políticas de Reinício**:
    - Aplicação de `restart: unless-stopped` em todos os containers para garantir auto-recuperação da stack após reinício da VM ou falhas transitórias.
 4. **Persistência de Dados**:
    - **Híbrida**: Named volumes para dados dinâmicos (`mosquitto_data`, `mosquitto_log`, `nodered_data`, `influxdb_data`, `grafana_data`, `caddy_data`, `caddy_config`).
-   - Bind mounts, somente leitura, para arquivos de configuração versionados em `infra/` (`infra/caddy/Caddyfile`, `infra/mosquitto/config/mosquitto.conf`, `infra/nodered/settings.js`).
+   - Bind mounts, somente leitura, para arquivos de configuração versionados em `infra/` (`infra/caddy/Caddyfile`, `infra/mosquitto/config/`, `infra/nodered/settings.js`).
+   - Bind mount, somente leitura, para arquivos gerados na VM e fora do Git: `infra/mosquitto/config/passwd` (T07) e `infra/mosquitto/certs/` (T09). O Mosquitto roda com o usuário 1883, então o `passwd` e o `server.key` precisam pertencer a ele ([docs/vm.md](../vm.md#deploy-da-stack-t06)).
 5. **Segredos só no `.env`**:
    - Senhas e tokens (Node-RED, InfluxDB e Grafana) ficam no `.env`, que não vai para o Git. O `.env.example` traz os nomes e deixa os valores vazios.
    - O compose usa `${VAR:?mensagem}` para esses campos, sem valor padrão. Se o `.env` faltar ou um campo estiver vazio, o `docker compose up` para com erro, em vez de subir com uma senha conhecida exposta na 443.
@@ -36,7 +37,8 @@ Restrição vinda da [ADR 0006](0006-vm-aws-ec2.md): o Docker cria regras de ipt
    - O editor fica atrás do Caddy na 443, aberta para a internet. Pelo editor dá para rodar código dentro do container, então ele exige login.
    - O `infra/nodered/settings.js` configura o `adminAuth` com um único usuário, lido de `NODE_RED_ADMIN_USER` e `NODE_RED_ADMIN_PASSWORD`. Não existe usuário anônimo: sem login, a API de administração responde 401.
    - O mesmo arquivo define o `credentialSecret` (de `NODE_RED_CREDENTIAL_SECRET`), que cifra as credenciais salvas nos fluxos, como a senha do MQTT (T07) e o token do InfluxDB.
-   - Se alguma dessas variáveis faltar, ou se a senha tiver menos de 12 caracteres, o Node-RED não inicia.
+   - Na T10, o arquivo ganhou um segundo login, só para os nós `http in` e o dashboard ([ADR 0010](0010-nodered-auth-security.md)).
+   - Se alguma dessas variáveis faltar, ou se uma senha tiver menos de 12 caracteres, o Node-RED não inicia.
 7. **Automação do InfluxDB 2.x**:
    - Inicialização declarativa via variáveis de ambiente (`DOCKER_INFLUXDB_INIT_MODE=setup`, org, bucket, retenção de 30 dias, usuário e token de admin no `.env`).
    - O setup só roda com o volume `influxdb_data` vazio. Trocar a senha ou o token no `.env` depois disso não muda os valores gravados.

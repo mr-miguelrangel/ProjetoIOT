@@ -20,7 +20,10 @@ Para detalhes de design e evolução das decisões arquiteturais:
 - [ADR 0005 - Mosquitto na VM com TLS e deviceId Lógico](docs/adr/0005-mosquitto-logical-device-id.md)
 - [ADR 0006 - VM na AWS EC2 com SSH só por chave](docs/adr/0006-vm-aws-ec2.md)
 - [ADR 0007 - Stack da nuvem com Docker Compose](docs/adr/0007-docker-compose-stack.md)
-- [ADR 0008 - Caddy com HTTPS e subdomínios](docs/adr/0008-caddy-subdomains-https.md)
+- [ADR 0008 - Usuários e ACL no Mosquitto](docs/adr/0008-mosquitto-auth-acl.md)
+- [ADR 0009 - TLS no Mosquitto na porta 8883](docs/adr/0009-mosquitto-tls-8883.md)
+- [ADR 0010 - Login e credenciais no Node-RED](docs/adr/0010-nodered-auth-security.md)
+- [ADR 0011 - Caddy com HTTPS e subdomínios](docs/adr/0011-caddy-subdomains-https.md)
 - [VM na nuvem: criação, firewall, verificação (T05) e deploy da stack (T06)](docs/vm.md)
 
 ---

@@ -251,13 +251,50 @@ chmod 600 .env
 Gere um valor para cada campo vazio e cole no `.env` com `nano .env`:
 
 ```bash
-openssl rand -base64 24   # NODE_RED_ADMIN_PASSWORD, DOCKER_INFLUXDB_INIT_PASSWORD, GF_SECURITY_ADMIN_PASSWORD
+openssl rand -base64 24   # NODE_RED_ADMIN_PASSWORD, NODE_RED_HTTP_NODE_PASSWORD, DOCKER_INFLUXDB_INIT_PASSWORD, GF_SECURITY_ADMIN_PASSWORD
 openssl rand -hex 32      # NODE_RED_CREDENTIAL_SECRET, DOCKER_INFLUXDB_INIT_ADMIN_TOKEN
 ```
 
-Guardem as senhas num gerenciador de senhas. O `.env` só existe na VM e não vai para o Git. Até a T08, deixe `DOMAIN=localhost`.
+Guardem as senhas num gerenciador de senhas. O `.env` só existe na VM e não vai para o Git.
 
-### 3. Subir a stack
+- Até a T08, deixe `DOMAIN=localhost`.
+- Troque o `ACME_EMAIL` por um e-mail real. O Let's Encrypt recusa endereços `@example.com`, e o Caddy não consegue emitir o certificado da T08.
+
+### 3. Criar os usuários do Mosquitto (T07)
+
+Sem o arquivo `infra/mosquitto/config/passwd`, o Mosquitto não sobe. O comando pede a senha de cada usuário duas vezes (`gateway-01`, `nodered` e `dev-mqttx`):
+
+```bash
+docker run --rm -it -v "$PWD/infra/mosquitto/config:/mosquitto/config" eclipse-mosquitto:2.0 sh -c '
+  mosquitto_passwd -c /mosquitto/config/passwd gateway-01 &&
+  mosquitto_passwd    /mosquitto/config/passwd nodered &&
+  mosquitto_passwd    /mosquitto/config/passwd dev-mqttx &&
+  chown 1883:1883 /mosquitto/config/passwd && chmod 600 /mosquitto/config/passwd'
+```
+
+O `chown` é obrigatório: o Mosquitto roda com o usuário 1883 e não lê um arquivo de outro dono com permissão `600`. Para trocar uma senha depois, veja o [`passwd.example`](../infra/mosquitto/config/passwd.example).
+
+Guardem as três senhas no gerenciador de senhas. A do `gateway-01` vai para o `config.h` do firmware, e a do `nodered` vai no nó MQTT do Node-RED.
+
+### 4. Gerar o certificado TLS da 8883 (T09)
+
+Sem o certificado, o Mosquitto também não sobe. O script gera uma CA própria e o certificado do broker, e passa o `server.key` para o usuário 1883 com `sudo`:
+
+```bash
+./infra/mosquitto/certs/generate-certs.sh "$(grep '^DOMAIN=' .env | cut -d= -f2)"
+```
+
+O certificado vale para o `DOMAIN`, `mqtt.<DOMAIN>`, `localhost` e `127.0.0.1`. Quando o domínio da T08 for definido, troque o `DOMAIN` no `.env`, rode o script de novo e reinicie o broker (`docker compose restart mosquitto`).
+
+O `ca.crt` é o arquivo que os clientes usam para confiar no broker (ESP32 e MQTTX). Para copiá-lo para o seu PC:
+
+```powershell
+scp projetoiot-vm:ProjetoIOT/infra/mosquitto/certs/ca.crt .
+```
+
+O `ca.key` fica só na VM, porque com ele qualquer pessoa assina um certificado aceito pelos clientes.
+
+### 5. Subir a stack
 
 ```bash
 docker compose up -d
@@ -266,13 +303,33 @@ docker compose ps
 
 Os cinco containers precisam aparecer como `Up`, e a coluna de portas só pode mostrar a `443` (Caddy) e a `8883` (Mosquitto). Se faltar algum campo no `.env`, o compose para com a mensagem `defina ... no .env`.
 
+Se o `iot-mosquitto` ficar em `Restarting`, veja o motivo com `docker compose logs mosquitto`:
+
+| Mensagem | Causa |
+|---|---|
+| `Error opening password file` | Falta o `passwd` (passo 3) |
+| `Unable to load CA certificates` | Faltam os certificados (passo 4) |
+| `Unable to load server key file ... Permission denied` | O `server.key` não pertence ao usuário 1883: `sudo chown 1883:1883 infra/mosquitto/certs/server.key` |
+
+O log também mostra avisos de que o `mosquitto.acl` é legível por todos e não pertence ao usuário do Mosquitto. Na versão 2.0, que é a usada no compose, são só avisos.
+
 Como todos os containers usam `restart: unless-stopped`, a stack volta sozinha quando a VM reinicia.
 
 Para atualizar depois de um `git pull`: `docker compose up -d` de novo. O Docker só recria os containers que mudaram.
 
-### 4. Verificar
+### 6. Verificar
 
-No seu PC, o `verificar-vm.ps1` precisa terminar com `Tudo certo`, agora com a 443 e a 8883 como `aberta`. A 8883 aceita a conexão TCP, mas o MQTT com TLS só funciona depois da T09.
+No seu PC, o `verificar-vm.ps1` precisa terminar com `Tudo certo`, agora com a 443 e a 8883 como `aberta`.
+
+Para testar o MQTT com TLS a partir da própria VM, com o usuário de testes (troque a senha):
+
+```bash
+docker run --rm --network host -v "$PWD/infra/mosquitto/certs:/c:ro" eclipse-mosquitto:2.0 \
+  mosquitto_pub -h localhost -p 8883 --cafile /c/ca.crt -u dev-mqttx -P '<senha do dev-mqttx>' \
+  -t projetoiot/teste/telemetry -m '{}'
+```
+
+Sem erro na saída, o broker aceitou a conexão com TLS e senha. A mesma conexão sem `--cafile` ou sem senha precisa falhar.
 
 Para abrir o Node-RED e o Grafana antes do domínio da T08, use um túnel SSH. O navegador resolve qualquer `*.localhost` para o próprio PC, e o túnel leva a conexão até a 443 da VM:
 
@@ -286,11 +343,11 @@ Com o túnel aberto, acesse `https://nodered.localhost:8443` e `https://grafana.
 |---|---|
 | Editor do Node-RED | Pede usuário e senha (`NODE_RED_ADMIN_USER` e `NODE_RED_ADMIN_PASSWORD`) |
 | `https://nodered.localhost:8443/flows` sem login | `401` |
+| Nós `http in` e dashboard do Node-RED | Pedem o login do `viewer` (`NODE_RED_HTTP_NODE_USER` e `NODE_RED_HTTP_NODE_PASSWORD`) |
 | Grafana | Entra com `GF_SECURITY_ADMIN_USER` e `GF_SECURITY_ADMIN_PASSWORD`; `admin`/`adminpassword123` é recusado |
 | `docker compose ps` | Cinco containers `Up`, só 443 e 8883 publicadas |
 
 ## Próximos passos
 
-- **T07**: usuários e ACL no Mosquitto ([contrato MQTT, seção 5](mqtt-contrato.md#5-permissões-no-mosquitto-t07)).
-- **T08**: apontar o domínio (por exemplo, um subdomínio gratuito do DuckDNS) para o IP elástico e trocar o `DOMAIN` no `.env`.
-- **T09**: ativar o listener 8883 com TLS no `mosquitto.conf`.
+- **T08**: apontar o domínio (por exemplo, um subdomínio gratuito do DuckDNS) para o IP elástico, trocar o `DOMAIN` e o `ACME_EMAIL` no `.env` e gerar de novo o certificado da 8883.
+- **T09, certificado de produção**: decidir entre usar o certificado do Caddy no Mosquitto ou manter a CA própria e gravar o `ca.crt` no ESP32 (ver a [ADR 0009](adr/0009-mosquitto-tls-8883.md)).

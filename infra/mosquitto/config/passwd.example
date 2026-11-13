@@ -1,15 +1,28 @@
 # Modelo de password_file do Mosquitto (formato: usuario:hash_senha_sha512pbkdf2)
 # NÃO COLOQUE SENHAS REAIS NESTE ARQUIVO DE EXEMPLO.
-# 
-# Para gerar ou atualizar as senhas com hash na VM ou ambiente de deploy:
-#   docker run --rm -it -v $(pwd)/infra/mosquitto/config:/mosquitto/config eclipse-mosquitto:2.0 \
-#     mosquitto_passwd -c /mosquitto/config/passwd gateway-01
-#   docker run --rm -it -v $(pwd)/infra/mosquitto/config:/mosquitto/config eclipse-mosquitto:2.0 \
-#     mosquitto_passwd -b /mosquitto/config/passwd nodered SUA_SENHA_NODRED
-#   docker run --rm -it -v $(pwd)/infra/mosquitto/config:/mosquitto/config eclipse-mosquitto:2.0 \
-#     mosquitto_passwd -b /mosquitto/config/passwd dev-mqttx SUA_SENHA_TESTE
 #
-# Usuários obrigatórios de acordo com docs/mqtt-contrato.md:
+# O arquivo real é infra/mosquitto/config/passwd, que fica fora do Git (.gitignore).
+# Sem ele, o Mosquitto não sobe ("Error opening password file").
+#
+# Para criar os três usuários, na raiz do repositório (o comando pede cada senha duas vezes;
+# assim a senha não fica no histórico do shell):
+#
+#   docker run --rm -it -v "$PWD/infra/mosquitto/config:/mosquitto/config" eclipse-mosquitto:2.0 sh -c '
+#     mosquitto_passwd -c /mosquitto/config/passwd gateway-01 &&
+#     mosquitto_passwd    /mosquitto/config/passwd nodered &&
+#     mosquitto_passwd    /mosquitto/config/passwd dev-mqttx &&
+#     chown 1883:1883 /mosquitto/config/passwd && chmod 600 /mosquitto/config/passwd'
+#
+# O chown é obrigatório: o Mosquitto roda com o usuário 1883 e não consegue ler um passwd
+# com dono root e permissão 600.
+#
+# Para trocar a senha de um usuário (sem o -c, que apagaria os outros):
+#
+#   docker run --rm -it -v "$PWD/infra/mosquitto/config:/mosquitto/config" eclipse-mosquitto:2.0 sh -c '
+#     mosquitto_passwd /mosquitto/config/passwd gateway-01 && chown 1883:1883 /mosquitto/config/passwd'
+#   docker compose restart mosquitto
+#
+# Usuários obrigatórios de acordo com docs/mqtt-contrato.md (seção 5):
 # - gateway-01
 # - nodered
 # - dev-mqttx

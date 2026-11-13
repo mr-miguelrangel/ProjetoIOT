@@ -3,6 +3,8 @@
 ## Status
 Aceito. Relacionado à T09 (Issue #11) e alinhado aos ADRs 0005, 0006, 0007 e 0008.
 
+Pendente: a integração com o certificado do Caddy (item 2) ainda não está implementada. O `mosquitto.conf` usa o certificado autoassinado de `/mosquitto/certs`, então o ESP32 precisa confiar no `ca.crt` gerado, e não na ISRG Root X1. A escolha entre as duas opções fica para antes da integração do firmware.
+
 ## Contexto
 O contrato de arquitetura do ProjetoIOT define que a comunicação externa (ESP32 Master, clientes de simulação Wokwi e MQTTX) deve trafegar criptografada pela internet com TLS na porta `8883`. Ao mesmo tempo, a porta padrão MQTT `1883` em texto puro deve ficar estritamente confinada à rede privada interna do Docker (`iot-network`), permitindo que apenas o container do Node-RED se comunique com o Mosquitto sem sobrecarga de TLS, eliminando qualquer risco de sniffing na borda pública da VM.
 
@@ -14,6 +16,7 @@ O contrato de arquitetura do ProjetoIOT define que a comunicação externa (ESP3
    - **Terminação direta no Mosquitto**: a porta `8883` é atendida diretamente pelo broker.
    - **Integração com Caddy (Produção)**: o `Caddyfile` define o subdomínio `mqtt.{$DOMAIN}` gerenciando a emissão ACME pelo Let's Encrypt / ZeroSSL. O volume do Caddy (`caddy_data`) é montado no container do Mosquitto como somente leitura (`/caddy_data:ro`), permitindo usar os certificados gerenciados na nuvem.
    - **Desenvolvimento Local (`generate-certs.sh`)**: fornecimento de um script reprodutível em `infra/mosquitto/certs/generate-certs.sh` para gerar certificados autoassinados com Subject Alternative Names (SAN) válidos para `localhost`, `127.0.0.1` e `${DOMAIN}`.
+   - **Permissões**: o Mosquitto roda com o usuário 1883. O script passa o `server.key` para esse usuário (com `sudo` na VM). Com o dono `ubuntu` e permissão `600`, o broker não sobe (`Unable to load server key file ... Permission denied`).
 3. **Validação no Firmware do ESP32**:
    - O firmware no modo seguro usará `WiFiClientSecure` validando o certificado da autoridade certificadora raiz (`MQTT_ROOT_CA`). Em produção, a raiz é a `ISRG Root X1` da Let's Encrypt; em desenvolvimento, é o `ca.crt` gerado.
 
