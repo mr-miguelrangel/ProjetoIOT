@@ -1,27 +1,11 @@
-# Git ignore para projeto PlatformIO / ESP32 C++
-.pio
-.vscode
-.idea
+# Arquivos gerados pelo Node-RED em execução (nodered/ é montado como /data)
+nodered/*
+!nodered/Dockerfile
+!nodered/flows.json
 
-# Credenciais e configurações locais
-include/config.h
+# Banco SQLite do histórico (nodered/historico.db = /data/historico.db no container)
+*.db
+*.db-journal
 
-# Compilação e binários
-*.o
-*.a
-*.elf
-*.bin
-*.hex
-compile_commands.json
-
-# Ambiente Docker / Infra
-.env
-infra/mosquitto/config/passwd
-!infra/mosquitto/config/passwd.example
-infra/mosquitto/certs/*.key
-infra/mosquitto/certs/*.crt
-infra/mosquitto/certs/*.csr
-infra/mosquitto/certs/*.srl
-infra/mosquitto/certs/*.ext
-!infra/mosquitto/certs/generate-certs.sh
-
+__pycache__/
+.venv/
