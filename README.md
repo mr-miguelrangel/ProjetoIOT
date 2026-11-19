@@ -1,25 +1,28 @@
-# IDC – Etapa de nuvem (Node-RED + MQTT)
+# IDC – Mesh LoRa de temperatura e umidade (firmware + nuvem)
 
 Projeto final de Internet das Coisas – ICT/Unifesp, São José dos Campos.
 
-Três nós escravos medem temperatura e umidade e enviam as leituras via LoRa para um nó mestre.
-O mestre publica as leituras via MQTT. Este repositório contém **apenas a etapa de nuvem**:
-o broker MQTT e o Node-RED com o dashboard.
+Nós escravos (Slave) medem temperatura e umidade com um DHT11 e enviam as leituras por uma malha
+LoRa (mesh) até o nó mestre (Master). O Master publica as leituras via MQTT, e a etapa de nuvem
+(broker MQTT + Node-RED) mostra tudo no dashboard e grava no banco de dados.
 
 ```
  nó 1 ─┐
- nó 2 ─┼─ LoRa ─> mestre ── Wi-Fi / MQTT ──> Mosquitto :1883 ──> Node-RED :1880 ──> dashboard
- nó 3 ─┘
+ nó 2 ─┼─ LoRa mesh ─> Master ── Wi-Fi / MQTT ──> Mosquitto :1883 ──> Node-RED :1880 ──> dashboard
+ nó 3 ─┘                                                                   └──> SQLite (histórico)
 ```
+
+Um nó pode falar direto com o Master ou através de outro nó (repetidor): a malha escolhe o caminho sozinha.
 
 ## Estrutura
 
 ```
-docker-compose.yml          # sobe os dois serviços: mosquitto e nodered
+codigos/master/             # firmware do nó mestre (Heltec WiFi LoRa 32 V3): mesh LoRa + MQTT + painel web
+codigos/slave/              # firmware dos nós (Heltec WiFi LoRa 32 V3): DHT11 + mesh LoRa
+compose.yml                 # sobe os dois serviços: mosquitto e nodered
 mosquitto/mosquitto.conf    # broker na porta 1883, acesso anônimo
 nodered/Dockerfile          # imagem do Node-RED + @flowfuse/node-red-dashboard + node-red-node-sqlite
 nodered/flows.json          # o flow (carregado automaticamente ao subir)
-simulador/simular_mestre.py # simula o nó mestre para testar sem hardware
 docs/evidencias/            # capturas de tela do funcionamento
 ```
 
@@ -43,14 +46,16 @@ Para parar: `docker compose down`.
 
 ## Contrato MQTT
 
-O firmware do mestre deve seguir este contrato.
+O firmware do mestre (`codigos/master/`) segue este contrato.
 
 | Tópico | Payload | Quem publica |
 |---|---|---|
 | `idc/sensores/<id>/leituras` | JSON (abaixo) | mestre, uma mensagem por leitura de cada nó |
 | `idc/mestre/status` | `online` ou `offline` (texto) | mestre |
 
-**Leituras.** `<id>` é `no1`, `no2` ou `no3`. Exemplo de payload:
+**Leituras.** `<id>` é `no` + o ID numérico do nó (o nó com ID 1 publica como `no1`, e assim por
+diante). O dashboard tem painéis para `no1`, `no2` e `no3`; nós com outros IDs são gravados no banco,
+mas ainda não aparecem nos gauges. Exemplo de payload:
 
 ```json
 {"temperatura": 25.4, "umidade": 61.2, "rssi": -87}
@@ -62,12 +67,70 @@ O firmware do mestre deve seguir este contrato.
 | `umidade` | número | % | sim |
 | `rssi` | número | dBm (RSSI do LoRa) | não |
 
+No firmware, o `rssi` é o do último salto: o sinal com que o Master ouviu o nó que entregou o pacote.
+Para um nó que chega por um repetidor, é o RSSI do repetidor.
+
 **Status do mestre.** Ao conectar, o mestre publica `online` com *retain*. Na conexão ele registra um
 Last Will no mesmo tópico com payload `offline` e *retain*: se o mestre cair, o broker publica `offline`
 por ele. O *retain* faz o dashboard saber o status atual mesmo se for aberto ou reiniciado depois.
 
-Configuração recomendada no mestre: broker na porta 1883, sem usuário/senha, QoS 0 nas leituras,
-QoS 1 + retain no status, e um `client_id` único (ex.: `idc-mestre`).
+Configuração usada no mestre: broker na porta 1883, sem usuário/senha, QoS 0 nas leituras, retain
+no status (o Last Will é registrado com QoS 1) e `client_id` `idc-mestre`.
+
+## Firmware (Master e Slave)
+
+As duas placas são **Heltec WiFi LoRa 32 (V3)**. Cada pasta abre direto na Arduino IDE
+(`codigos/master/master.ino` e `codigos/slave/slave.ino`).
+
+**Placa e bibliotecas** (Arduino IDE):
+
+| O quê | Onde | Master | Slave |
+|---|---|---|---|
+| Placa "Heltec WiFi LoRa 32(V3)" | pacote de placas da Heltec (`heltec:esp32`) | ✓ | ✓ |
+| Heltec ESP32 Dev-Boards | gerenciador de bibliotecas | ✓ | ✓ |
+| PubSubClient (Nick O'Leary) | gerenciador de bibliotecas | ✓ | |
+| DHT sensor library + Adafruit Unified Sensor | gerenciador de bibliotecas | | ✓ |
+
+**Ligação do DHT11 no Slave:** dados no **GPIO 4** (`DHT_PIN` em `codigos/slave/sensor_dht.h`), VCC em 3,3 V e GND.
+
+**Como os dados viajam.** Cada slot do pacote LoRa tem 25 bytes; 4 deles levam a medida:
+temperatura × 10 (int16) e umidade × 10 (uint16). A codificação está em `medida_sensor.h`, que é
+**igual** nas duas pastas. Se mudar de um lado, copie para o outro. O Slave lê o DHT11 a cada 10 s
+e envia a leitura mais recente a cada ciclo (60 s). Um nó que ainda não conseguiu ler o sensor
+continua na malha, mas o Master não publica nada por ele.
+
+### Configurar o Master
+
+1. Grave o `codigos/master/` e abra o Serial Monitor (115200): a cada boot ele mostra a senha da rede de
+   recuperação `MASTER_CONFIG` e a senha do usuário `admin` do painel (geradas no primeiro boot e
+   guardadas na placa).
+2. Conecte na rede `MASTER_CONFIG` e abra <http://192.168.4.1/wifi> (usuário `admin`).
+3. Preencha o Wi-Fi, o IP fixo do Master na sua rede e o **Broker MQTT**: o IP do computador onde
+   roda o `docker compose`. Salve; o Master reinicia.
+
+Se o IP do computador mudar (outra rede, outro dia), basta voltar em `/wifi` e trocar o broker.
+O painel do Master (`http://<ip-do-master>/`) mostra o estado do MQTT, e o display também
+(`MQTT OK`, `--` desconectado ou `OFF` sem broker).
+
+### Configurar os Slaves
+
+No Slave, toque no botão **PRG** até chegar na tela **SISTEMA** e toque 3× rápido para abrir o menu.
+Toque para descer até "Iniciar Ponto de Acesso" e segure 2 s para escolher. Conecte na rede
+`SLAVE_CONFIG` (a senha aparece no Serial Monitor) e abra <http://192.168.4.1>. Ali se
+define o **ID do nó** (1 vira `no1`, 2 vira `no2`...) e os parâmetros de rádio. SF e frequência
+precisam ser iguais em todos os nós e no Master. Cada nó precisa de um ID único, diferente do ID do
+Master (101).
+
+### Economia de energia (extra)
+
+Na mesma página, em "Gerenciamento de Energia", cada Slave pode ser configurado como:
+
+- **Repetidor** (padrão): o rádio LoRa fica sempre ligado, e o nó encaminha as leituras de outros nós.
+- **Nó de ponta**: só envia a própria leitura e o rádio LoRa pode dormir. Ele fica ligado por um tempo
+  mínimo (padrão 10 min) e depois dorme (padrão 50 min). O DHT11 continua lendo durante o sono.
+
+Pensado para nós alimentados por bateria; o sono do rádio foi testado na versão 5.5.1 do firmware. Na apresentação todos os nós ficam como repetidor: um nó de
+ponta dormindo passa do limite de 60 s e aparece como "SEM DADOS" no dashboard.
 
 ## O flow no Node-RED
 
@@ -86,19 +149,7 @@ QoS 1 + retain no status, e um `client_id` único (ex.: `idc-mestre`).
 
 ## Testando sem o hardware
 
-### Simulador do mestre (Python)
-
-```sh
-pip install -r simulador/requirements.txt
-python simulador/simular_mestre.py              # broker em localhost
-python simulador/simular_mestre.py 192.168.0.10 # outro broker
-```
-
-O simulador publica `online` em `idc/mestre/status` (com Last Will `offline`) e, a cada 5 s, uma
-leitura aleatória para `no1`, `no2` e `no3`. Com Ctrl+C ele publica `offline` e sai; se for morto à
-força, o broker publica o `offline` pelo Last Will.
-
-### Com `mosquitto_pub`
+Dá para fazer o papel do Master publicando as mensagens do contrato à mão com o `mosquitto_pub`.
 
 Com o `mosquitto_pub` instalado na máquina:
 
@@ -114,6 +165,18 @@ Sem instalar nada, usando o cliente que já vem no container do broker:
 docker compose exec mosquitto mosquitto_pub -h localhost -t idc/sensores/no2/leituras -m '{"temperatura": 31.5, "umidade": 55.0}'
 ```
 
+Para gerar leituras contínuas dos três nós (a cada 5 s, até Ctrl+C):
+
+```sh
+while true; do
+  for n in 1 2 3; do
+    docker compose exec -T mosquitto mosquitto_pub -h localhost -t idc/sensores/no$n/leituras \
+      -m "{\"temperatura\": $((20 + RANDOM % 10)).$((RANDOM % 10)), \"umidade\": $((50 + RANDOM % 20)).$((RANDOM % 10))}"
+  done
+  sleep 5
+done
+```
+
 Para ver tudo o que passa no broker:
 
 ```sh
@@ -122,16 +185,16 @@ docker compose exec mosquitto mosquitto_sub -h localhost -t 'idc/#' -v
 
 ## Evidências de funcionamento
 
-Testes feitos com o simulador em 13/11/2026 (`docs/evidencias/`):
+Testes feitos com leituras simuladas em 13/11/2026 (`docs/evidencias/`):
 
-**Simulador rodando**: mestre online, os três nós atualizando gauges e gráficos, "há 2 s" em cada nó.
+**Leituras chegando**: mestre online, os três nós atualizando gauges e gráficos, "há 2 s" em cada nó.
 
 ![dashboard com dados](docs/evidencias/dashboard.png)
 
-**Simulador encerrado à força**: o Last Will publicou `offline`, e após mais de 60 s sem leituras
+**Mestre desconectado à força**: o Last Will publicou `offline`, e após mais de 60 s sem leituras
 os três nós aparecem como "SEM DADOS".
 
-![dashboard sem dados](docs/evidencias/dashboard-sem-dados.png)
+![dashboard sem dados](docs/evidencias/dashboard_sem_dados.png)
 
 Também foi verificado que uma mensagem enviada com `mosquitto_pub` (comando acima) chega ao flow
 (nó *debug*).
@@ -139,9 +202,9 @@ Também foi verificado que uma mensagem enviada com `mosquitto_pub` (comando aci
 **Flow completo no editor do Node-RED**: recepção MQTT, gauges e gráficos, "nó sem dados", status
 do mestre e o grupo "Banco de dados".
 
-![flow completo no Node-RED](docs/evidencias/flow-node-red.png)
+![flow completo no Node-RED](docs/evidencias/flow_node_red.png)
 
-> **Pendente:** quando o hardware estiver pronto, uma captura com o mestre real enviando dados.
+> **Pendente:** uma captura com o Master real enviando dados dos Slaves.
 
 ## Banco de dados (desafio extra)
 
@@ -221,37 +284,38 @@ Para começar do zero, pare o Node-RED e apague `nodered/historico.db`; a tabela
 ### Roteiro de demonstração (apresentação)
 
 1. Subir tudo: `docker compose up -d --build`.
-2. Rodar o simulador por alguns minutos: `python simulador/simular_mestre.py`.
+2. Ligar o Master e os Slaves e deixar enviando por alguns minutos (sem o hardware, usar o laço de
+   `mosquitto_pub` da seção [Testando sem o hardware](#testando-sem-o-hardware)).
 3. Abrir <http://localhost:1880/dashboard>, ir em ☰ → **Histórico** e mostrar os gráficos, a tabela e
    o total de registros. Trocar o filtro de nó e de período. Clicar em **Exportar CSV**.
 4. Anotar o total de registros e reiniciar os containers: `docker compose restart`.
 5. Recarregar a página **Histórico**: as leituras de antes do reinício continuam lá e o total é o
-   mesmo (ou maior, se o simulador continuou rodando).
+   mesmo (ou maior, se os nós continuaram enviando).
 6. (Opcional) Enviar uma mensagem malformada e mostrar que nada quebra; ela aparece no debug
    "leituras descartadas" do editor:
    `docker compose exec mosquitto mosquitto_pub -h localhost -t idc/sensores/no1/leituras -m 'isso nao e json'`
 
 ### Evidências
 
-Testes feitos com o simulador em 13/11/2026 (`docs/evidencias/`). Mensagens malformadas (texto que
+Testes feitos com leituras simuladas em 13/11/2026 (`docs/evidencias/`). Mensagens malformadas (texto que
 não é JSON, JSON sem umidade, temperatura como texto) foram descartadas sem afetar o flow.
 
-**Antes do reinício**: simulador rodado por alguns minutos e encerrado; o banco tem 333 registros.
+**Antes do reinício**: leituras enviadas por alguns minutos e interrompidas; o banco tem 333 registros.
 
-![histórico antes do reinício](docs/evidencias/historico-antes.png)
+![histórico antes do reinício](docs/evidencias/historico_antes.png)
 
 **Depois de `docker compose restart`**: os mesmos 333 registros, gráficos e tabela continuam lá.
 
-![histórico depois do reinício](docs/evidencias/historico-depois-restart.png)
+![histórico depois do reinício](docs/evidencias/historico_depois_restart.png)
 
 **CSV exportado**: arquivo `historico.csv` baixado pelo botão "Exportar CSV" (cabeçalho + 333 leituras;
 o print mostra as primeiras 40 linhas).
 
-![CSV exportado](docs/evidencias/historico-csv.png)
+![CSV exportado](docs/evidencias/historico_csv.png)
 
 **Grupo "Banco de dados" no editor do Node-RED**
 
-![grupo Banco de dados no flow](docs/evidencias/flow-banco-de-dados.png)
+![grupo Banco de dados no flow](docs/evidencias/flow_banco_de_dados.png)
 
 ## Decisões de simplicidade
 
