@@ -6,6 +6,3 @@ nodered/*
 # Banco SQLite do histórico (nodered/historico.db = /data/historico.db no container)
 *.db
 *.db-journal
-
-__pycache__/
-.venv/

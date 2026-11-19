@@ -1,6 +1,6 @@
 #pragma once
 /**
- * DHT11Module.h
+ * dht11_module.h
  * Implementação de ISensor para DHT11 (lib "DHT sensor library" da Adafruit).
  *
  * Dados codificados (5 bytes):
@@ -11,7 +11,7 @@
  * Observações DHT11: resolução de 1 °C / 1 %, intervalo mínimo entre leituras 1 s.
  */
 #include <DHT.h>
-#include "SensorModule.h"
+#include "sensor_module.h"
 
 class DHT11Module : public ISensor {
 public:
@@ -43,7 +43,8 @@ public:
         _stale = false;
         return SENSOR_OK;
       }
-      delay(_minInterval);
+      // Não espera depois da última tentativa: no Slave o loop do rádio não pode travar.
+      if (i + 1 < _retries) delay(_minInterval);
     }
     _stale = true;  // mantém o último valor bom, mas sinaliza
     return SENSOR_ERR_READ;

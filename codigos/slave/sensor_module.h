@@ -1,6 +1,6 @@
 #pragma once
 /**
- * SensorModule.h
+ * sensor_module.h
  * Interface genérica de sensor + empacotamento de frame para LoRa.
  * Independente do rádio: o código principal envia o buffer como quiser.
  *

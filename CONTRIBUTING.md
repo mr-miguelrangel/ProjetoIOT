@@ -34,9 +34,8 @@ O que cada parte do projeto precisa:
 
 | Parte | Pasta | Ferramentas |
 |---|---|---|
-| Nuvem (broker + Node-RED) | `docker-compose.yml`, `mosquitto/`, `nodered/` | Docker com Docker Compose |
-| Simulador do mestre | `simulador/` | Python 3 e `pip install -r simulador/requirements.txt` |
-| Firmware do nó sensor | `Sensor_HeltecV3/` | Arduino IDE com as bibliotecas listadas no topo de `Sensor_HeltecV3.ino` |
+| Nuvem (broker + Node-RED) | `compose.yml`, `mosquitto/`, `nodered/` | Docker com Docker Compose |
+| Firmware do Master e dos Slaves | `codigos/master/`, `codigos/slave/` | Arduino IDE com a placa e as bibliotecas da seção [Firmware](README.md#firmware-master-e-slave) do README |
 
 Para subir a nuvem, veja a seção [Como rodar](README.md#como-rodar) do README.
 
@@ -57,20 +56,20 @@ Formato: `<tipo>/<descricao-curta>`, em minúsculas, com palavras separadas por 
 | Tipo | Quando usar | Exemplo |
 |---|---|---|
 | `feat/` | nova funcionalidade | `feat/alerta-umidade-alta`, `feat/historico-filtro-30-dias` |
-| `fix/` | correção de erro | `fix/grafico-sem-no3`, `fix/simulador-reconecta-broker` |
+| `fix/` | correção de erro | `fix/grafico-sem-no3`, `fix/master-reconecta-broker` |
 | `docs/` | só documentação (README, prints, este guia) | `docs/contrato-mqtt-rssi`, `docs/evidencia-mestre-real` |
 | `chore/` | configuração, dependências, Docker, `.gitignore` | `chore/atualiza-node-red-dashboard` |
 
-Mudanças no firmware usam os mesmos tipos, com o assunto no nome: `feat/heltec-envia-bateria`, `fix/heltec-intervalo-envio`.
+Mudanças no firmware usam os mesmos tipos, com o assunto no nome: `feat/slave-envia-bateria`, `fix/master-reconecta-mqtt`.
 
 ## 3. Fazer a alteração
 
 Mantenha a alteração **pequena**: o PR deve poder ser revisado em poucos minutos. Exemplos de PRs do tamanho certo para este projeto:
 
 - "Adiciona o filtro de 30 dias na página Histórico" (só o flow);
-- "Inclui o campo `bateria` no contrato MQTT" (README + simulador + flow, porque o contrato mudou);
+- "Inclui o campo `bateria` no contrato MQTT" (README + Master + flow, porque o contrato mudou);
 - "Corrige o aviso de nó sem dados que não aparecia para o no3" (só o flow);
-- "Reduz o intervalo de envio do Heltec para 10 s" (só `Sensor_HeltecV3.ino`).
+- "Reduz o intervalo de leitura do DHT11 para 5 s" (só `codigos/slave/sensor_dht.cpp`).
 
 Um PR como "faz o banco de dados inteiro" deve ser quebrado em passos: criar a tabela, depois a página Histórico, depois o botão Exportar CSV.
 
@@ -89,20 +88,21 @@ Antes de commitar, confira com `git diff nodered/flows.json` se só mudou o que 
 O contrato (tópicos `idc/sensores/<id>/leituras` e `idc/mestre/status` e os campos do JSON) está na seção [Contrato MQTT](README.md#contrato-mqtt) do README. Se você mudar um tópico ou um campo, atualize no mesmo PR:
 
 - o `README.md`;
-- o `simulador/simular_mestre.py`, para que ele continue publicando no formato novo;
+- o firmware do Master (`codigos/master/master.ino`), que monta o tópico e o JSON;
 - o flow em `nodered/flows.json`, se ele usar o campo.
 
-### Alterações no firmware (`Sensor_HeltecV3/`)
+### Alterações no firmware (`codigos/master/` e `codigos/slave/`)
 
-Os parâmetros de rádio (`LORA_FREQ`, `LORA_BW`, `LORA_SF`) precisam ser iguais no nó sensor e no mestre. Se mudar algum deles, diga no PR qual valor o mestre deve usar.
+- O formato do pacote LoRa é o mesmo nos dois lados: mudou o `SlotTelemetria`, o `protocolo_mesh.h` ou o `medida_sensor.h` em uma pasta, mude na outra **no mesmo PR**.
+- SF e frequência do rádio precisam ser iguais em todos os nós e no Master. Os padrões ficam em `config_radio.h`; se mudar, diga no PR.
+- Compile as duas pastas na Arduino IDE antes de abrir o PR.
 
 ### Testar
 
-Suba a stack e gere leituras com o simulador:
+Suba a stack e gere leituras com o Master e os Slaves ou, sem o hardware, com o laço de `mosquitto_pub` da seção [Testando sem o hardware](README.md#testando-sem-o-hardware) do README:
 
 ```sh
 docker compose up -d --build
-python simulador/simular_mestre.py
 ```
 
 Depois confira:
@@ -110,7 +110,7 @@ Depois confira:
 - <http://localhost:1880/dashboard>: mestre 🟢 online e os nós `no1`, `no2` e `no3` atualizando;
 - ☰ → **Histórico**: filtros, gráficos, tabela e **Exportar CSV**, se a mudança mexe no banco.
 
-Para testar um caso específico sem o simulador, publique uma mensagem pelo cliente do container:
+Para testar um caso específico, publique uma mensagem pelo cliente do container:
 
 ```sh
 docker compose exec mosquitto mosquitto_pub -h localhost -t idc/sensores/no3/leituras -m '{"temperatura": 27.0, "umidade": 58.5, "rssi": -92}'
@@ -142,7 +142,7 @@ Exemplos:
 
 ```text
 Corrige o aviso de nó sem dados para o no3
-Adiciona o campo bateria no simulador do mestre
+Adiciona o campo bateria na leitura publicada pelo Master
 Documenta o RSSI no contrato MQTT
 Atualiza o @flowfuse/node-red-dashboard no Dockerfile
 ```
@@ -150,7 +150,7 @@ Atualiza o @flowfuse/node-red-dashboard no Dockerfile
 Com corpo explicando o porquê:
 
 ```sh
-git commit -m "Reduz o intervalo de envio do Heltec para 10 s" -m "Com 30 s o gráfico de 30 min tinha poucos pontos por nó."
+git commit -m "Reduz o ciclo de envio do Slave para 30 s" -m "Com 60 s o gráfico de 30 min tinha poucos pontos por nó."
 ```
 
 Não commite arquivos gerados ou locais: o `nodered/historico.db` e os demais arquivos que o Node-RED cria em `nodered/` (`node_modules/`, `.npm/`, `.config.*.json`) já estão no `.gitignore`. Se o `git status` mostrar algum deles, não o adicione.
@@ -193,15 +193,15 @@ Nos gráficos, cada ponto passa a ser a média de 6 h nesse período.
 
 ## Como testar
 1. `docker compose up -d --build`
-2. `python simulador/simular_mestre.py` por alguns minutos
+2. Deixar o Master e os Slaves (ou o laço de `mosquitto_pub` do README) enviando por alguns minutos
 3. Abrir http://localhost:1880/dashboard, ir em ☰ → Histórico e escolher "últimos 30 dias"
 4. Clicar em Exportar CSV e conferir que o arquivo traz as leituras do período
 
 ## Evidência
-![histórico com filtro de 30 dias](docs/evidencias/historico-30-dias.png)
+![histórico com filtro de 30 dias](docs/evidencias/historico_30_dias.png)
 ```
 
-Se a mudança for visual, salve o print em `docs/evidencias/` com um nome que diga o que ele mostra (como os que já estão lá: `dashboard.png`, `historico-csv.png`) e use-o no PR e, se fizer sentido, no README.
+Se a mudança for visual, salve o print em `docs/evidencias/` com um nome que diga o que ele mostra, em minúsculas, sem acento e com `_` no lugar de espaço (como os que já estão lá: `dashboard.png`, `historico_csv.png`) e use-o no PR e, se fizer sentido, no README.
 
 Para um exemplo de descrição de uma mudança maior, veja o [PR #43](https://github.com/mr-miguelrangel/ProjetoIOT/pull/43).
 
@@ -241,7 +241,7 @@ git switch main && git pull
 git switch -c feat/historico-filtro-30-dias
 docker compose up -d --build
 # ... altera no editor (http://localhost:1880), clica em Deploy ...
-python simulador/simular_mestre.py   # testa no http://localhost:1880/dashboard
+# ... gera leituras (hardware ou mosquitto_pub) e testa no http://localhost:1880/dashboard ...
 git diff nodered/flows.json
 git add nodered/flows.json
 git commit -m "Adiciona filtro de 30 dias na página Histórico"
